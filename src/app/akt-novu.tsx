@@ -23,11 +23,11 @@ export default function AktNovuScreen() {
         </Pressable>
 
         <Pressable
-          style={[styles.tile, styles.tileBlue]}
+          style={[styles.tile, styles.tileRed]}
           onPress={() => router.push({ pathname: '/tehvil', params: { mode: 'send' } })}
         >
-          <Ionicons name="share-outline" size={42} color="#0C447C" />
-          <Text style={[styles.tileText, { color: '#0C447C' }]}>Avadanlıq təhvil akti</Text>
+          <Ionicons name="share-outline" size={42} color="#8A1C1C" />
+          <Text style={[styles.tileText, { color: '#8A1C1C' }]}>Avadanlıq təhvil akti</Text>
         </Pressable>
       </View>
     </View>
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 10,
   },
-  tileBlue: { backgroundColor: '#E6F1FB', borderColor: '#85B7EB' },
+  tileRed: { backgroundColor: '#FCEBEB', borderColor: '#E58A8A' },
   tileGreen: { backgroundColor: '#EAF3DE', borderColor: '#97C459' },
   tileText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

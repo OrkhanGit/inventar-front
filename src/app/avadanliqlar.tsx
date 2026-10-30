@@ -14,6 +14,32 @@ import { ProductItem, getAllProducts } from '../api';
 import { SERVICE_TEMPLATES, getServiceProducts } from '../api/servisApi';
 import BackButton from '../components/BackButton';
 
+// Rənglər: yararsız = boz xana + tünd qara yazı, servisə gedəcək = açıq yaşıl xana
+const BAD_COLORS = {
+  bg: '#E4E4E1',
+  border: '#A8A8A3',
+  text: '#1A1A1A',
+  iconBg: '#CFCFCB',
+  count: '#111111', // yuxarıdakı say yazısı (tünd qara)
+};
+const SERVICE_COLORS = {
+  bg: '#E3F7D0',
+  border: '#8FD460',
+  text: '#2E6B10',
+  iconBg: '#C5EBA3',
+  count: '#4CAF1F', // yuxarıdakı say yazısı (açıq yaşıl)
+};
+
+const isBad = (p: ProductItem) =>
+  String((p.raw as any)?.condition ?? '')
+    .toUpperCase()
+    .includes('YARARSIZ');
+
+const isToService = (p: ProductItem) => {
+  const v = (p.raw as any)?.toService;
+  return v === true || String(v).toLowerCase() === 'true';
+};
+
 export default function AvadanliqlarScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -73,17 +99,37 @@ export default function AvadanliqlarScreen() {
     return q ? all.filter((p) => p.barcode.includes(q)) : all;
   }, [all, query]);
 
-  // Eyni adlı avadanlıqları qruplaşdırır, sayları toplayır (məs. Printer (10))
+  // Servisə gedəcək və istifadəsi yararsız avadanlıqların sayı
+  const { toServiceCount, badCount } = useMemo(() => {
+    let ts = 0;
+    let bad = 0;
+    for (const p of items) {
+      if (isBad(p)) bad += 1;
+      if (isToService(p)) ts += 1;
+    }
+    return { toServiceCount: ts, badCount: bad };
+  }, [items]);
+
+  // Eyni adlı avadanlıqları qruplaşdırır, sayları toplayır (məs. Printer (10)).
+  // Hər qrup üçün ayrıca: servisə gedəcək sayı və yararsız sayı (ümumi sayın daxilində).
   const groups = useMemo(() => {
-    const map = new Map<string, { name: string; total: number }>();
+    const map = new Map<
+      string,
+      { name: string; total: number; service: number; bad: number }
+    >();
     for (const p of items) {
       const name = (p.name ?? '').trim() || 'Adsız';
       const key = name.toLocaleLowerCase('az');
       const n = Number((p.raw as any)?.count);
       const add = n > 0 ? n : 1;
-      const g = map.get(key);
-      if (g) g.total += add;
-      else map.set(key, { name, total: add });
+      let g = map.get(key);
+      if (!g) {
+        g = { name, total: 0, service: 0, bad: 0 };
+        map.set(key, g);
+      }
+      g.total += add;
+      if (isToService(p)) g.service += add;
+      if (isBad(p)) g.bad += add;
     }
     return Array.from(map.values()).sort(
       (a, b) => b.total - a.total || a.name.localeCompare(b.name)
@@ -103,21 +149,42 @@ export default function AvadanliqlarScreen() {
   const listHeader =
     items.length > 0 ? (
       <View style={styles.headerBox}>
-        <View style={styles.countRow}>
-          <Text style={[styles.count, { marginBottom: 0 }]}>
+        <View style={styles.countCol}>
+          <Text style={styles.countLine}>
             {query.trim()
               ? `${items.length} avadanlıq tapıldı`
               : `Bütün avadanlıqlar (${items.length})`}
           </Text>
           {!query.trim() && serviceCount !== null && (
-            <Text style={styles.countService}>Servisdə olan avadanlıqlar ({serviceCount})</Text>
+            <Text style={[styles.countLine, { color: '#D32F2F' }]}>
+              Servisdə olan avadanlıqlar ({serviceCount})
+            </Text>
           )}
-        </View>
-        {groups.map((g) => (
-          <Text key={g.name} style={[styles.count, { marginBottom: 2 }]}>
-            {g.name} ({g.total})
+          <Text style={[styles.countLine, { color: SERVICE_COLORS.count, fontWeight: '600' }]}>
+            Servisə gedəcək avadanlıqlar ({toServiceCount})
           </Text>
-        ))}
+          <Text style={[styles.countLine, { color: BAD_COLORS.count, fontWeight: '600' }]}>
+            İstifadəsi yararsız avadanlıqlar ({badCount})
+          </Text>
+        </View>
+        <View style={styles.groupsBox}>
+          {groups.map((g) => (
+            <Text key={g.name} style={styles.countLine}>
+              {`${g.name} (${g.total})`}
+              {/* Ümumi saydan sonra: servisə gedəcək (yaşıl), yararsız (qara) */}
+              {g.service > 0 && (
+                <Text style={{ color: SERVICE_COLORS.count, fontWeight: '700' }}>
+                  {` (${g.service})`}
+                </Text>
+              )}
+              {g.bad > 0 && (
+                <Text style={{ color: BAD_COLORS.count, fontWeight: '700' }}>
+                  {` (${g.bad})`}
+                </Text>
+              )}
+            </Text>
+          ))}
+        </View>
       </View>
     ) : undefined;
 
@@ -175,20 +242,39 @@ export default function AvadanliqlarScreen() {
           onRefresh={onRefresh}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
-          renderItem={({ item }) => (
-            <Pressable style={styles.card} onPress={() => openItem(item)}>
-              <View style={styles.cardIcon}>
-                <Ionicons name="laptop-outline" size={20} color="#27500A" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardName} numberOfLines={1}>
-                  {item.name || '—'}
-                </Text>
-                <Text style={styles.cardBarcode}>{item.barcode || 'Barkod yoxdur'}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#B4B2A9" />
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            // Yararsız olsa boz, servisə gedəcəksə açıq yaşıl (ikisi də olsa yararsız üstündür)
+            const tone = isBad(item) ? BAD_COLORS : isToService(item) ? SERVICE_COLORS : null;
+            return (
+              <Pressable
+                style={[
+                  styles.card,
+                  tone && { backgroundColor: tone.bg, borderColor: tone.border },
+                ]}
+                onPress={() => openItem(item)}
+              >
+                <View style={[styles.cardIcon, tone && { backgroundColor: tone.iconBg }]}>
+                  <Ionicons
+                    name="laptop-outline"
+                    size={20}
+                    color={tone ? tone.text : '#27500A'}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.cardName, tone && { color: tone.text }]}
+                    numberOfLines={1}
+                  >
+                    {item.name || '—'}
+                  </Text>
+                  <Text style={[styles.cardBarcode, tone && { color: tone.text }]}>
+                    {item.barcode || 'Barkod yoxdur'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={tone ? tone.text : '#B4B2A9'} />
+              </Pressable>
+            );
+          }}
         />
       )}
     </View>
@@ -212,15 +298,9 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, height: '100%', fontSize: 15, color: '#1A1A1A' },
   headerBox: { marginBottom: 10 },
-  count: { fontSize: 12, color: '#6B6B66', marginBottom: 10 },
-  countRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    columnGap: 12,
-    marginBottom: 4,
-  },
-  countService: { fontSize: 12, color: '#D32F2F' },
+  countCol: { gap: 2, marginBottom: 6 },
+  groupsBox: { gap: 2 },
+  countLine: { fontSize: 12, color: '#6B6B66' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

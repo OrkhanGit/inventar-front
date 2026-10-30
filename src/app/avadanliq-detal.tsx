@@ -4,16 +4,29 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { ProductItem } from '../api';
 import { EntryDate, getEntryDates } from '../api/entryDatesApi';
 import BackButton from '../components/BackButton';
-import { PRODUCT_FIELDS } from '../constants/productFields';
+import { DETAIL_ONLY_FIELDS, PRODUCT_FIELDS } from '../constants/productFields';
 
 // "serialNumber" -> "Serial Number"
 const humanize = (key: string) =>
   key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
 const labelOf = (key: string) =>
-  PRODUCT_FIELDS.find((f) => f.key === key)?.label ?? humanize(key);
+  PRODUCT_FIELDS.find((f) => f.key === key)?.label ??
+  DETAIL_ONLY_FIELDS.find((f) => f.key === key)?.label ??
+  humanize(key);
 
 const pad = (n: number) => String(n).padStart(2, '0');
+
+type Tone = 'good' | 'bad' | undefined;
+
+// Vəziyyət (Condition enum): YARARLI / YARARSIZ
+const conditionInfo = (v: unknown): { text: string; tone: Tone } | null => {
+  if (typeof v !== 'string') return null;
+  const s = v.toUpperCase();
+  if (s === 'YARARLI') return { text: 'Yararlı', tone: 'good' };
+  if (s === 'YARARSIZ') return { text: 'Yararsız', tone: 'bad' };
+  return null;
+};
 
 const formatValue = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '—';
@@ -31,6 +44,17 @@ const formatValue = (v: unknown): string => {
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
 };
+
+// Detalda göstərmə sırası (ad və barkoddan sonra). "Haradan gəlib"-dən sonra vəziyyət gəlir.
+const DETAIL_ORDER = [
+  'count',
+  'fromUser',
+  'toLocation',
+  'condition',
+  'toService',
+  'location',
+  'description',
+];
 
 export default function AvadanliqDetalScreen() {
   const { data } = useLocalSearchParams<{ data: string }>();
@@ -58,17 +82,35 @@ export default function AvadanliqDetalScreen() {
     };
   }, [item.barcode]);
 
-  // Əvvəl ad və barkod, sonra API-dən gələn qalan bütün sahələr
+  // Əvvəl ad və barkod, sonra DETAIL_ORDER sırası ilə sahələr, sonda API-dən gələn qalan sahələr
   // entryDate gizlədilir, çünki bütün tarixlər aşağıdakı ayrıca qutuda göstərilir
   const rows = useMemo(() => {
+    const raw: Record<string, unknown> = item.raw ?? {};
     const hidden = new Set(['id', 'name', 'barcode', 'entryDate', 'entryDates']);
-    const rest = Object.entries(item.raw ?? {})
-      .filter(([k]) => !hidden.has(k))
-      .map(([k, v]) => ({ label: labelOf(k), value: formatValue(v) }));
+
+    const buildRow = (key: string): { label: string; value: string; tone: Tone } => {
+      const v = raw[key];
+      if (key === 'condition') {
+        const info = conditionInfo(v);
+        if (info) return { label: labelOf(key), value: info.text, tone: info.tone };
+      }
+      return { label: labelOf(key), value: formatValue(v), tone: undefined };
+    };
+
+    // Bu sahələr raw-da olmasa belə həmişə göstərilir ("—" kimi)
+    const alwaysShow = new Set(['condition', 'toService']);
+    const ordered = DETAIL_ORDER.filter((k) => k in raw || alwaysShow.has(k)).map(buildRow);
+
+    const orderedSet = new Set(DETAIL_ORDER);
+    const extra = Object.keys(raw)
+      .filter((k) => !hidden.has(k) && !orderedSet.has(k))
+      .map(buildRow);
+
     return [
-      { label: labelOf('name'), value: formatValue(item.name) },
-      { label: labelOf('barcode'), value: formatValue(item.barcode) },
-      ...rest,
+      { label: labelOf('name'), value: formatValue(item.name), tone: undefined as Tone },
+      { label: labelOf('barcode'), value: formatValue(item.barcode), tone: undefined as Tone },
+      ...ordered,
+      ...extra,
     ];
   }, [item]);
 
@@ -87,7 +129,15 @@ export default function AvadanliqDetalScreen() {
               style={[styles.row, i === rows.length - 1 && { borderBottomWidth: 0 }]}
             >
               <Text style={styles.label}>{r.label}</Text>
-              <Text style={styles.value}>{r.value}</Text>
+              <Text
+                style={[
+                  styles.value,
+                  r.tone === 'good' && styles.valueGood,
+                  r.tone === 'bad' && styles.valueBad,
+                ]}
+              >
+                {r.value}
+              </Text>
             </View>
           ))}
         </View>
@@ -145,6 +195,8 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 12, color: '#6B6B66', marginBottom: 3 },
   value: { fontSize: 15, color: '#1A1A1A', fontWeight: '500' },
+  valueGood: { color: '#27500A', fontWeight: '600' },
+  valueBad: { color: '#A32D2D', fontWeight: '600' },
 
   datesBox: { marginTop: 14 },
   datesHeader: {

@@ -12,6 +12,8 @@ export type ActPayload = {
   description: string;
   fromUser: string;
   toUser: string;
+   condition?: (string | null)[]; // hər avadanlıq üçün "YARARLI" | "YARARSIZ" | null
+  toService?: boolean[]; // hər avadanlıq üçün true | false
 };
 
 // Köhnə kodlar xəta verməsin deyə bu tip saxlanılıb (əgər başqa yerdə işlənmirsə silə də bilərsən)
@@ -54,6 +56,8 @@ type ServerAct = {
   description?: string | null;
   fromUser?: string | null;
   toUser?: string | null;
+  condition?: string | string[] | null;
+  toService?: boolean | boolean[] | null;
 };
 
 const TIMEOUT_MS = 15000;
@@ -196,7 +200,9 @@ export type ProductItem = {
   raw: Record<string, unknown>;
 };
 
-export async function getAllProducts(force = false): Promise<ProductItem[]> {
+// force = true: həmişə serverdən təzə data çəkir (keş köhnə data göstərməsin deyə).
+// Keşdən istifadə etmək üçün çağıranda getAllProducts(false) yaz.
+export async function getAllProducts(force = true): Promise<ProductItem[]> {
   if (productsCache && !force) return productsCache;
   const list = (await request<Record<string, unknown>[]>(ENDPOINTS.allProducts)) ?? [];
   productsCache = list.map((raw) => ({
@@ -266,7 +272,7 @@ export async function findActiveBarcodes(barcodes: string[]): Promise<string[]> 
   return found;
 }
 
-export async function createProduct(body: Record<string, string | number>): Promise<void> {
+export async function createProduct(body: Record<string, string | number | boolean>): Promise<void> {
   await request(ENDPOINTS.createProduct, {
     method: 'POST',
     body: JSON.stringify(body),

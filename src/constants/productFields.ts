@@ -19,7 +19,14 @@ export const PRODUCT_FIELDS: FieldDef[] = [
   { key: 'name', label: 'Avadanlığın adı', required: true, icon: 'laptop-outline' },
   { key: 'count', label: 'Sayı', required: true, type: 'integer', icon: 'layers-outline' },
   { key: 'fromUser', label: 'Kimdən gəlib', icon: 'person-outline' },
+  { key: 'toLocation', label: 'Haradan gəlib', icon: 'storefront-outline' },
   { key: 'entryDate', label: 'Daxil olma tarixi', icon: 'calendar-outline', auto: 'now' },
   { key: 'location', label: 'Yerləşdiyi yer', required: true, icon: 'storefront-outline' },
   { key: 'description', label: 'Qeyd', icon: 'document-text-outline', multiline: true },
+];
+
+// Yalnız detal ekranında göstərilən sahələr (formda istifadə olunmur)
+export const DETAIL_ONLY_FIELDS: { key: string; label: string }[] = [
+  { key: 'condition', label: 'Vəziyyəti' },
+  { key: 'toService', label: 'Servisdədir' },
 ];
